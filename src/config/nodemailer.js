@@ -2,20 +2,40 @@ import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 dotenv.config();
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || "smtp.gmail.com",
-  port: Number(process.env.EMAIL_PORT) || 465,
-  secure: Number(process.env.EMAIL_PORT || 465) === 465,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const getTransporter = () => {
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, "") : "";
+
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || "smtp.gmail.com",
+    port: Number(process.env.EMAIL_PORT) || 465,
+    secure: Number(process.env.EMAIL_PORT || 465) === 465,
+    auth: {
+      user: user,
+      pass: pass,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
+};
+
+const getFromAddress = () => {
+  if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM;
+  if (process.env.EMAIL_USER) return `"VibesChat" <${process.env.EMAIL_USER}>`;
+  return '"VibesChat" <bangerjaat111@gmail.com>';
+};
 
 export const sendEmail = async ({ fullName, otp, email }) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error("❌ EMAIL_USER or EMAIL_PASS environment variable is missing.");
+    throw new Error("Server email configuration is missing. Please set EMAIL_USER and EMAIL_PASS environment variables.");
+  }
+
   try {
+    const transporter = getTransporter();
     const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM || '"VibesChat" <bangerjaat111@gmail.com>',
+      from: getFromAddress(),
       to: email,
       subject: "Verify your VibesChat account",
       text: `Your VibesChat verification OTP is: ${otp}`,
@@ -164,23 +184,23 @@ export const sendEmail = async ({ fullName, otp, email }) => {
     });
 
     console.log("Message sent: %s", info.messageId);
-
-  
-
-  } 
-  
-   catch (error) {
+    return info;
+  } catch (error) {
     console.error("❌ Email error:", error.message);
     throw error;
   }
 };
 
-
-
 export const resendemail = async ({ fullName, otp, email }) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error("❌ EMAIL_USER or EMAIL_PASS environment variable is missing.");
+    throw new Error("Server email configuration is missing. Please set EMAIL_USER and EMAIL_PASS environment variables.");
+  }
+
   try {
+    const transporter = getTransporter();
     const info = await transporter.sendMail({
-      from: '"VibesChat" <bangerjaat111@gmail.com>',
+      from: getFromAddress(),
       to: email,
       subject: "Your new VibesChat verification code",
       text: `Hi ${fullName}, your new VibesChat verification OTP is: ${otp}. This OTP is valid for ${process.env.OTP_EXPIRES_IN || 5} minutes.`,
@@ -212,7 +232,7 @@ export const resendemail = async ({ fullName, otp, email }) => {
                 font-size:30px;
                 letter-spacing:1px;
               ">
-                ChatApp
+                VibesChat
               </h1>
 
               <p style="
@@ -319,7 +339,7 @@ export const resendemail = async ({ fullName, otp, email }) => {
                 margin-top:25px;
               ">
                 For your security, never share this OTP with anyone.
-                ChatApp will never ask you for your verification code.
+                VibesChat will never ask you for your verification code.
               </p>
 
             </div>
@@ -354,7 +374,7 @@ export const resendemail = async ({ fullName, otp, email }) => {
     });
 
     console.log("Resend OTP email sent: %s", info.messageId);
-
+    return info;
   } catch (error) {
     console.error("❌ Resend OTP email error:", error.message);
     throw error;
@@ -362,9 +382,15 @@ export const resendemail = async ({ fullName, otp, email }) => {
 };
 
 export const sendResetPasswordEmail = async ({ fullName, resetUrl, email }) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error("❌ EMAIL_USER or EMAIL_PASS environment variable is missing.");
+    throw new Error("Server email configuration is missing. Please set EMAIL_USER and EMAIL_PASS environment variables.");
+  }
+
   try {
+    const transporter = getTransporter();
     const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM || '"VibesChat" <bangerjaat111@gmail.com>',
+      from: getFromAddress(),
       to: email,
       subject: "Reset your VibesChat password",
       text: `Hi ${fullName}, click the link to reset your password: ${resetUrl}`,
@@ -388,14 +414,14 @@ export const sendResetPasswordEmail = async ({ fullName, resetUrl, email }) => {
               padding:30px;
               text-align:center;
             ">
-              <h1 style="margin:0; color:#ffffff; font-size:30px; letter-spacing:1px;">ChatApp</h1>
+              <h1 style="margin:0; color:#ffffff; font-size:30px; letter-spacing:1px;">VibesChat</h1>
               <p style="margin:8px 0 0; color:#ddd6fe; font-size:14px;">Connect. Chat. Enjoy.</p>
             </div>
             <div style="padding:35px 30px;">
               <h2 style="margin:0 0 15px; color:#111827; font-size:24px;">Reset your password 🔐</h2>
               <p style="color:#4b5563; font-size:15px; line-height:1.7;">
                 Hi <strong>${fullName}</strong>,<br><br>
-                We received a request to reset your password for your ChatApp account. Click the button below to set a new password:
+                We received a request to reset your password for your VibesChat account. Click the button below to set a new password:
               </p>
               <div style="text-align:center; margin:30px 0;">
                 <a href="${resetUrl}" target="_blank" style="
@@ -418,7 +444,7 @@ export const sendResetPasswordEmail = async ({ fullName, resetUrl, email }) => {
               </p>
             </div>
             <div style="background:#f9fafb; padding:20px; text-align:center; border-top:1px solid #e5e7eb;">
-              <p style="margin:0; color:#9ca3af; font-size:12px;">© ${new Date().getFullYear()} ChatApp. All rights reserved.</p>
+              <p style="margin:0; color:#9ca3af; font-size:12px;">© ${new Date().getFullYear()} VibesChat. All rights reserved.</p>
             </div>
           </div>
         </div>
@@ -426,10 +452,11 @@ export const sendResetPasswordEmail = async ({ fullName, resetUrl, email }) => {
     });
 
     console.log("Reset password email sent: %s", info.messageId);
+    return info;
   } catch (error) {
     console.error("❌ Reset password email error:", error.message);
     throw error;
   }
 };
-  
-export default transporter;
+
+export default getTransporter;

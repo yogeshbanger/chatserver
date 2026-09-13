@@ -10,13 +10,31 @@ import crypto from "crypto";
 export const registerUser = async ({ username, fullName, email, password }) => {
   const existing = await User.findOne({ $or: [{ email }, { username }] });
   if (existing) {
-    if (existing.email === email) throw new Error("Email already registered");
+    if (existing.email === email) {
+      if (existing.isVerified) {
+        throw new Error("Email already registered");
+      }
+      // User registered before but email is unverified (e.g. OTP failed or expired earlier).
+      // Re-generate OTP, send email, and update account details.
+      const otp = generateOTP();
+      const otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
+      await sendEmail({ fullName, otp, email });
+
+      existing.username = username;
+      existing.fullName = fullName;
+      existing.password = password;
+      existing.otp = otp;
+      existing.otpExpires = otpExpires;
+      await existing.save();
+
+      return { userId: existing._id, email: existing.email };
+    }
     throw new Error("Username already taken");
   }
 
   const otp = generateOTP();
   const otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
-  sendEmail({ fullName, otp, email });
+  await sendEmail({ fullName, otp, email });
 
   const user = await User.create({
     username,
@@ -27,7 +45,6 @@ export const registerUser = async ({ username, fullName, email, password }) => {
     otpExpires,
     isVerified: false,
   });
-
 
   return { userId: user._id, email: user.email };
 };
