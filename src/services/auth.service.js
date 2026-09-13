@@ -4,7 +4,7 @@ import {
   generateRefreshToken,
   generateOTP,
 } from "../utils/generateToken.js";
-import { sendEmail } from "../config/nodemailer.js";
+import { sendEmail, resendemail, sendResetPasswordEmail } from "../config/nodemailer.js";
 import crypto from "crypto";
 
 export const registerUser = async ({ username, fullName, email, password }) => {
@@ -16,6 +16,7 @@ export const registerUser = async ({ username, fullName, email, password }) => {
 
   const otp = generateOTP();
   const otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
+  sendEmail({ fullName, otp, email });
 
   const user = await User.create({
     username,
@@ -27,23 +28,6 @@ export const registerUser = async ({ username, fullName, email, password }) => {
     isVerified: false,
   });
 
-  // Send OTP email
-  try {
-    await sendEmail({
-      to: email,
-      subject: "Verify your ChatApp account",
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
-          <h2 style="color:#4F46E5;">Welcome to ChatApp, ${fullName}!</h2>
-          <p>Your OTP for email verification is:</p>
-          <h1 style="letter-spacing:6px;color:#4F46E5;background:#f3f4f6;padding:12px;text-align:center;border-radius:8px;">${otp}</h1>
-          <p>This OTP is valid for ${process.env.OTP_EXPIRES_IN || 10} minutes.</p>
-        </div>
-      `,
-    });
-  } catch (err) {
-    console.error("OTP email failed:", err.message);
-  }
 
   return { userId: user._id, email: user.email };
 };
@@ -73,11 +57,7 @@ export const resendOTP = async (email) => {
   user.otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
   await user.save({ validateBeforeSave: false });
 
-  await sendEmail({
-    to: email,
-    subject: "Your new OTP",
-    html: `<h2>Your new OTP is: <b>${otp}</b></h2>`,
-  });
+  await resendemail({fullName:user.fullName, otp,email: user.email});
 
   return true;
 };
@@ -123,17 +103,10 @@ export const forgotPassword = async (email) => {
 
   const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
 
-  await sendEmail({
-    to: email,
-    subject: "Password Reset Request",
-    html: `
-      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
-        <h2>Password Reset</h2>
-        <p>Click the link below to reset your password. Valid for 15 minutes.</p>
-        <a href="${resetUrl}" style="display:inline-block;background:#4F46E5;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;">Reset Password</a>
-        <p>Or copy this link: ${resetUrl}</p>
-      </div>
-    `,
+  await sendResetPasswordEmail({
+    fullName: user.fullName,
+    resetUrl,
+    email: user.email,
   });
 
   return true;

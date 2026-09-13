@@ -3,6 +3,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendSuccess } from "../utils/response.js";
 import User from "../models/User.js";
 
+
 const cookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
