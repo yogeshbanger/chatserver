@@ -131,3 +131,28 @@ export const getBlockedUsers = asyncHandler(async (req, res) => {
   );
   return sendSuccess(res, 200, "Blocked users fetched", user.blockedUsers || []);
 });
+
+export const deleteAccount = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  // Delete user document
+  await User.findByIdAndDelete(userId);
+
+  // Remove from friends and blockedUsers array of other users
+  await User.updateMany(
+    {},
+    { $pull: { friends: userId, blockedUsers: userId } }
+  );
+
+  // Delete friend requests
+  const FriendRequest = (await import("../models/FriendRequest.js")).default;
+  await FriendRequest.deleteMany({
+    $or: [{ sender: userId }, { receiver: userId }],
+  });
+
+  // Delete group member entries
+  const GroupMember = (await import("../models/GroupMember.js")).default;
+  await GroupMember.deleteMany({ user: userId });
+
+  return sendSuccess(res, 200, "User account deleted successfully");
+});

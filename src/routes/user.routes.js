@@ -7,6 +7,7 @@ import {
   blockUser,
   unblockUser,
   getBlockedUsers,
+  deleteAccount,
 } from "../controllers/user.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import { upload } from "../middleware/upload.middleware.js";
@@ -19,6 +20,7 @@ router.get("/search", protect, searchUsers);
 router.get("/blocked", protect, getBlockedUsers);
 router.post("/block/:userId", protect, blockUser);
 router.post("/unblock/:userId", protect, unblockUser);
+router.delete("/account", protect, deleteAccount);
 router.get("/:id", protect, getUserById);
 
 export default router;

@@ -80,6 +80,11 @@ export const initSocket = (httpServer) => {
       }
     });
 
+    // Message reaction broadcast
+    socket.on("messageReaction", ({ conversationId, messageId, reactions }) => {
+      socket.to(conversationId).emit("messageReaction", { messageId, reactions });
+    });
+
     // WebRTC signaling
     socket.on("callUser", ({ to, from, offer, callType, callerInfo }) => {
       const toSocket = onlineUsers.get(to);

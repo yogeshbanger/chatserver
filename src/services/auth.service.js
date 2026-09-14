@@ -8,9 +8,14 @@ import { sendEmail, resendemail, sendResetPasswordEmail } from "../config/nodema
 import crypto from "crypto";
 
 export const registerUser = async ({ username, fullName, email, password }) => {
-  const existing = await User.findOne({ $or: [{ email }, { username }] });
+  const normalizedEmail = email ? email.toLowerCase().trim() : "";
+  const normalizedUsername = username ? username.toLowerCase().trim() : "";
+
+  const existing = await User.findOne({
+    $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
+  });
   if (existing) {
-    if (existing.email === email) {
+    if (existing.email === normalizedEmail) {
       if (existing.isVerified) {
         throw new Error("Email already registered");
       }
@@ -18,9 +23,9 @@ export const registerUser = async ({ username, fullName, email, password }) => {
       // Re-generate OTP, send email, and update account details.
       const otp = generateOTP();
       const otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
-      await sendEmail({ fullName, otp, email });
+      await sendEmail({ fullName, otp, email: normalizedEmail });
 
-      existing.username = username;
+      existing.username = normalizedUsername;
       existing.fullName = fullName;
       existing.password = password;
       existing.otp = otp;
@@ -34,12 +39,12 @@ export const registerUser = async ({ username, fullName, email, password }) => {
 
   const otp = generateOTP();
   const otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
-  await sendEmail({ fullName, otp, email });
+  await sendEmail({ fullName, otp, email: normalizedEmail });
 
   const user = await User.create({
-    username,
+    username: normalizedUsername,
     fullName,
-    email,
+    email: normalizedEmail,
     password,
     otp,
     otpExpires,
@@ -50,7 +55,8 @@ export const registerUser = async ({ username, fullName, email, password }) => {
 };
 
 export const verifyOTP = async (email, otp) => {
-  const user = await User.findOne({ email }).select("+otp +otpExpires");
+  const normalizedEmail = email ? email.toLowerCase().trim() : "";
+  const user = await User.findOne({ email: normalizedEmail }).select("+otp +otpExpires");
   if (!user) throw new Error("User not found");
   if (user.isVerified) throw new Error("Email already verified");
   if (!user.otp || user.otp !== otp) throw new Error("Invalid OTP");
@@ -65,7 +71,8 @@ export const verifyOTP = async (email, otp) => {
 };
 
 export const resendOTP = async (email) => {
-  const user = await User.findOne({ email });
+  const normalizedEmail = email ? email.toLowerCase().trim() : "";
+  const user = await User.findOne({ email: normalizedEmail });
   if (!user) throw new Error("User not found");
   if (user.isVerified) throw new Error("Email already verified");
 
@@ -74,13 +81,14 @@ export const resendOTP = async (email) => {
   user.otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
   await user.save({ validateBeforeSave: false });
 
-  await resendemail({fullName:user.fullName, otp,email: user.email});
+  await resendemail({ fullName: user.fullName, otp, email: user.email });
 
   return true;
 };
 
 export const loginUser = async (email, password) => {
-  const user = await User.findOne({ email }).select("+password");
+  const normalizedEmail = email ? email.toLowerCase().trim() : "";
+  const user = await User.findOne({ email: normalizedEmail }).select("+password");
   if (!user) throw new Error("Invalid email or password");
 
   const isMatch = await user.comparePassword(password);
@@ -105,7 +113,8 @@ export const loginUser = async (email, password) => {
 };
 
 export const forgotPassword = async (email) => {
-  const user = await User.findOne({ email });
+  const normalizedEmail = email ? email.toLowerCase().trim() : "";
+  const user = await User.findOne({ email: normalizedEmail });
   if (!user) throw new Error("No account with that email");
 
   const resetToken = crypto.randomBytes(32).toString("hex");

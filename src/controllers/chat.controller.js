@@ -69,6 +69,11 @@ export const getMessages = asyncHandler(async (req, res) => {
     deletedFor: { $ne: req.user._id },
   })
     .populate("sender", "username fullName profilePicture")
+    .populate({
+      path: "replyTo",
+      populate: { path: "sender", select: "username fullName" },
+    })
+    .populate("reactions.user", "username fullName")
     .sort("-createdAt")
     .skip((page - 1) * limit)
     .limit(Number(limit));
@@ -77,7 +82,7 @@ export const getMessages = asyncHandler(async (req, res) => {
 });
 
 export const sendMessage = asyncHandler(async (req, res) => {
-  const { conversationId, content, type = "text", fileUrl, fileName, fileSize } = req.body;
+  const { conversationId, content, type = "text", fileUrl, fileName, fileSize, replyTo } = req.body;
 
   const conversation = await Conversation.findById(conversationId);
   if (!conversation) return sendError(res, 404, "Conversation not found");
@@ -94,6 +99,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
     fileUrl,
     fileName,
     fileSize,
+    replyTo: replyTo || null,
     deliveredTo: conversation.participants.filter(
       (p) => p.toString() !== req.user._id.toString()
     ),
@@ -102,7 +108,13 @@ export const sendMessage = asyncHandler(async (req, res) => {
   conversation.lastMessage = message._id;
   await conversation.save();
 
-  const populated = await message.populate("sender", "username fullName profilePicture");
+  const populated = await Message.findById(message._id)
+    .populate("sender", "username fullName profilePicture")
+    .populate({
+      path: "replyTo",
+      populate: { path: "sender", select: "username fullName" },
+    })
+    .populate("reactions.user", "username fullName");
 
   // Emit socket event
   const io = req.app.get("io");
@@ -124,6 +136,90 @@ export const sendMessage = asyncHandler(async (req, res) => {
   }
 
   return sendSuccess(res, 201, "Message sent", populated);
+});
+
+export const toggleReaction = asyncHandler(async (req, res) => {
+  const { messageId } = req.params;
+  const { emoji } = req.body;
+  const userId = req.user._id;
+
+  if (!emoji) return sendError(res, 400, "Emoji required");
+
+  const message = await Message.findById(messageId);
+  if (!message) return sendError(res, 404, "Message not found");
+
+  const existingIndex = message.reactions.findIndex(
+    (r) => r.user.toString() === userId.toString() && r.emoji === emoji
+  );
+
+  if (existingIndex > -1) {
+    // Remove reaction if already added (toggle off)
+    message.reactions.splice(existingIndex, 1);
+  } else {
+    // Replace user's previous reaction or add new reaction
+    const userPrevReaction = message.reactions.findIndex(
+      (r) => r.user.toString() === userId.toString()
+    );
+    if (userPrevReaction > -1) {
+      message.reactions[userPrevReaction].emoji = emoji;
+    } else {
+      message.reactions.push({ user: userId, emoji });
+    }
+  }
+
+  await message.save();
+
+  const updatedMessage = await Message.findById(message._id)
+    .populate("sender", "username fullName profilePicture")
+    .populate({
+      path: "replyTo",
+      populate: { path: "sender", select: "username fullName" },
+    })
+    .populate("reactions.user", "username fullName");
+
+  const io = req.app.get("io");
+  if (io) {
+    io.to(updatedMessage.conversation.toString()).emit("messageUpdated", updatedMessage);
+  }
+
+  return sendSuccess(res, 200, "Reaction updated", updatedMessage);
+});
+
+export const logCallHistory = asyncHandler(async (req, res) => {
+  const { targetUserId, conversationId, content, callType = "audio" } = req.body;
+
+  let convId = conversationId;
+  if (!convId && targetUserId) {
+    let conversation = await Conversation.findOne({
+      isGroup: false,
+      participants: { $all: [req.user._id, targetUserId], $size: 2 },
+    });
+    if (!conversation) {
+      conversation = await Conversation.create({
+        isGroup: false,
+        participants: [req.user._id, targetUserId],
+      });
+    }
+    convId = conversation._id;
+  }
+
+  if (!convId) return sendError(res, 400, "Target user or conversation required");
+
+  const callMsg = await Message.create({
+    conversation: convId,
+    sender: req.user._id,
+    content: content || `Call (${callType})`,
+    type: "system",
+  });
+
+  const populated = await callMsg.populate("sender", "username fullName profilePicture");
+
+  const io = req.app.get("io");
+  if (io) {
+    io.to(convId.toString()).emit("newMessage", populated);
+  }
+
+  return sendSuccess(res, 201, "Call log saved", populated);
 });
 
 export const markAsRead = asyncHandler(async (req, res) => {
