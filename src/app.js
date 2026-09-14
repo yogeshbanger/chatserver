@@ -22,18 +22,21 @@ app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
+      const clientUrl = process.env.CLIENT_URL || "https://vibesschat.vercel.app";
       if (
-        !process.env.CLIENT_URL ||
-        process.env.CLIENT_URL === "*" ||
-        origin === process.env.CLIENT_URL ||
+        clientUrl === "*" ||
+        origin === clientUrl ||
         origin.endsWith(".vercel.app") ||
-        origin.includes("localhost")
+        origin.includes("localhost") ||
+        origin.includes("127.0.0.1")
       ) {
         return callback(null, true);
       }
       return callback(null, true);
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
   })
 );
 app.use(express.json({ limit: "10mb" }));
