@@ -6,11 +6,17 @@ const getTransporter = () => {
   const user = process.env.EMAIL_USER;
   const pass = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, "") : "";
 
+  const port = Number(process.env.EMAIL_PORT) || 587;
+  const isSecure = port === 465;
+
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || "smtp.gmail.com",
-    port: Number(process.env.EMAIL_PORT) || 465,
-    secure: Number(process.env.EMAIL_PORT || 465) === 465,
+    port: port,
+    secure: isSecure,
     family: 4,
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 8000,
     auth: {
       user: user,
       pass: pass,

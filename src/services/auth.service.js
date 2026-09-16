@@ -23,7 +23,6 @@ export const registerUser = async ({ username, fullName, email, password }) => {
       // Re-generate OTP, send email, and update account details.
       const otp = generateOTP();
       const otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
-      await sendEmail({ fullName, otp, email: normalizedEmail });
 
       existing.username = normalizedUsername;
       existing.fullName = fullName;
@@ -31,6 +30,12 @@ export const registerUser = async ({ username, fullName, email, password }) => {
       existing.otp = otp;
       existing.otpExpires = otpExpires;
       await existing.save();
+
+      try {
+        await sendEmail({ fullName, otp, email: normalizedEmail });
+      } catch (emailErr) {
+        console.warn("Email delivery warning for existing unverified user:", emailErr.message);
+      }
 
       return { userId: existing._id, email: existing.email };
     }
