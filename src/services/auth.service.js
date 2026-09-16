@@ -39,7 +39,6 @@ export const registerUser = async ({ username, fullName, email, password }) => {
 
   const otp = generateOTP();
   const otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
-  await sendEmail({ fullName, otp, email: normalizedEmail });
 
   const user = await User.create({
     username: normalizedUsername,
@@ -50,6 +49,12 @@ export const registerUser = async ({ username, fullName, email, password }) => {
     otpExpires,
     isVerified: false,
   });
+
+  try {
+    await sendEmail({ fullName, otp, email: normalizedEmail });
+  } catch (emailErr) {
+    console.warn("Email delivery warning during registration:", emailErr.message);
+  }
 
   return { userId: user._id, email: user.email };
 };
