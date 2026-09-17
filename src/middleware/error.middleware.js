@@ -7,7 +7,7 @@ export const notFound = (req, res, next) => {
 export const errorHandler = (err, req, res, next) => {
   console.error("❌ Error:", err);
 
-  let statusCode = err.statusCode || (res.statusCode === 200 ? 500 : res.statusCode);
+  let statusCode = err.statusCode || (res.statusCode !== 200 ? res.statusCode : 400);
   let message = err.message || "Server Error";
 
   // Mongoose bad ObjectId
@@ -19,7 +19,7 @@ export const errorHandler = (err, req, res, next) => {
   // Mongoose duplicate key
   if (err.code === 11000) {
     statusCode = 400;
-    const field = Object.keys(err.keyValue)[0];
+    const field = err.keyValue ? Object.keys(err.keyValue)[0] : "Field";
     message = `${field} already exists`;
   }
 

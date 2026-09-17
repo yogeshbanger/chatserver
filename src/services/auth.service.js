@@ -7,9 +7,19 @@ import {
 import { sendEmail, resendemail, sendResetPasswordEmail } from "../config/nodemailer.js";
 import crypto from "crypto";
 
+const createError = (msg, statusCode = 400) => {
+  const err = new Error(msg);
+  err.statusCode = statusCode;
+  return err;
+};
+
 export const registerUser = async ({ username, fullName, email, password }) => {
   const normalizedEmail = email ? email.toLowerCase().trim() : "";
   const normalizedUsername = username ? username.toLowerCase().trim() : "";
+
+  if (!normalizedUsername) {
+    throw createError("Username is required", 400);
+  }
 
   const existing = await User.findOne({
     $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
@@ -17,7 +27,7 @@ export const registerUser = async ({ username, fullName, email, password }) => {
   if (existing) {
     if (existing.email === normalizedEmail) {
       if (existing.isVerified) {
-        throw new Error("Email already registered");
+        throw createError("Email already registered", 400);
       }
       // User registered before but email is unverified (e.g. OTP failed or expired earlier).
       // Re-generate OTP, send email, and update account details.
@@ -31,15 +41,14 @@ export const registerUser = async ({ username, fullName, email, password }) => {
       existing.otpExpires = otpExpires;
       await existing.save();
 
-      try {
-        await sendEmail({ fullName, otp, email: normalizedEmail });
-      } catch (emailErr) {
+      // Send email asynchronously without blocking registration response
+      sendEmail({ fullName, otp, email: normalizedEmail }).catch((emailErr) => {
         console.warn("Email delivery warning for existing unverified user:", emailErr.message);
-      }
+      });
 
       return { userId: existing._id, email: existing.email };
     }
-    throw new Error("Username already taken");
+    throw createError("Username already taken", 400);
   }
 
   const otp = generateOTP();
@@ -55,11 +64,10 @@ export const registerUser = async ({ username, fullName, email, password }) => {
     isVerified: false,
   });
 
-  try {
-    await sendEmail({ fullName, otp, email: normalizedEmail });
-  } catch (emailErr) {
+  // Send email asynchronously without blocking registration response
+  sendEmail({ fullName, otp, email: normalizedEmail }).catch((emailErr) => {
     console.warn("Email delivery warning during registration:", emailErr.message);
-  }
+  });
 
   return { userId: user._id, email: user.email };
 };
@@ -83,15 +91,18 @@ export const verifyOTP = async (email, otp) => {
 export const resendOTP = async (email) => {
   const normalizedEmail = email ? email.toLowerCase().trim() : "";
   const user = await User.findOne({ email: normalizedEmail });
-  if (!user) throw new Error("User not found");
-  if (user.isVerified) throw new Error("Email already verified");
+  if (!user) throw createError("User not found", 400);
+  if (user.isVerified) throw createError("Email already verified", 400);
 
   const otp = generateOTP();
   user.otp = otp;
   user.otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
   await user.save({ validateBeforeSave: false });
 
-  await resendemail({ fullName: user.fullName, otp, email: user.email });
+  // Non-blocking email dispatch
+  resendemail({ fullName: user.fullName, otp, email: user.email }).catch((emailErr) => {
+    console.warn("Resend email warning:", emailErr.message);
+  });
 
   return true;
 };
@@ -99,10 +110,10 @@ export const resendOTP = async (email) => {
 export const loginUser = async (email, password) => {
   const normalizedEmail = email ? email.toLowerCase().trim() : "";
   const user = await User.findOne({ email: normalizedEmail }).select("+password");
-  if (!user) throw new Error("Invalid email or password");
+  if (!user) throw createError("Invalid email or password", 400);
 
   const isMatch = await user.comparePassword(password);
-  if (!isMatch) throw new Error("Invalid email or password");
+  if (!isMatch) throw createError("Invalid email or password", 400);
 
   if (!user.isVerified) {
     const error = new Error("Please verify your email first before logging in.");
@@ -125,7 +136,7 @@ export const loginUser = async (email, password) => {
 export const forgotPassword = async (email) => {
   const normalizedEmail = email ? email.toLowerCase().trim() : "";
   const user = await User.findOne({ email: normalizedEmail });
-  if (!user) throw new Error("No account with that email");
+  if (!user) throw createError("No account with that email", 400);
 
   const resetToken = crypto.randomBytes(32).toString("hex");
   const hashedToken = crypto
@@ -137,12 +148,16 @@ export const forgotPassword = async (email) => {
   user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 min
   await user.save({ validateBeforeSave: false });
 
-  const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+  const clientUrl = process.env.CLIENT_URL || "https://vibesschat.vercel.app";
+  const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
 
-  await sendResetPasswordEmail({
+  // Non-blocking email dispatch
+  sendResetPasswordEmail({
     fullName: user.fullName,
     resetUrl,
     email: user.email,
+  }).catch((emailErr) => {
+    console.warn("Reset password email warning:", emailErr.message);
   });
 
   return true;
