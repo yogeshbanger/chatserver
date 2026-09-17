@@ -15,9 +15,9 @@ const getTransporter = () => {
         user: user,
         pass: pass,
       },
-      connectionTimeout: 5000,
-      greetingTimeout: 5000,
-      socketTimeout: 5000,
+      connectionTimeout: 20000,
+      greetingTimeout: 20000,
+      socketTimeout: 20000,
     });
   }
 
@@ -31,9 +31,9 @@ const getTransporter = () => {
     lookup: (hostname, options, callback) => {
       dns.lookup(hostname, { ...options, family: 4 }, callback);
     },
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-    socketTimeout: 5000,
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
+    socketTimeout: 20000,
     auth: {
       user: user,
       pass: pass,
@@ -44,11 +44,11 @@ const getTransporter = () => {
   });
 };
 
-const sendMailWithTimeout = (transporter, mailOptions, timeoutMs = 5000) => {
+const sendMailWithTimeout = (transporter, mailOptions, timeoutMs = 25000) => {
   return Promise.race([
     transporter.sendMail(mailOptions),
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Email sending timed out after 5s")), timeoutMs)
+      setTimeout(() => reject(new Error("Email sending timed out after 25s")), timeoutMs)
     ),
   ]);
 };
@@ -65,7 +65,7 @@ export const sendEmail = async ({ fullName, otp, email }) => {
   console.log(`==================================================\n`);
 
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.warn("⚠️ EMAIL_USER or EMAIL_PASS missing in environment. Using console OTP fallback.");
+    console.warn("⚠️ EMAIL_USER or EMAIL_PASS missing in environment. Check Render logs for OTP.");
     return { success: true, messageId: "console-fallback" };
   }
 
@@ -105,10 +105,10 @@ export const sendEmail = async ({ fullName, otp, email }) => {
       `,
     });
 
-    console.log("Message sent: %s", info.messageId);
+    console.log("✅ Email sent successfully: %s", info.messageId);
     return info;
   } catch (error) {
-    console.error("❌ Email error (OTP logged above):", error.message);
+    console.error("❌ Email error (OTP logged in console):", error.message);
     return { success: false, messageId: "error-fallback", error: error.message };
   }
 };
@@ -119,7 +119,7 @@ export const resendemail = async ({ fullName, otp, email }) => {
   console.log(`==================================================\n`);
 
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.warn("⚠️ EMAIL_USER or EMAIL_PASS missing in environment. Using console OTP fallback.");
+    console.warn("⚠️ EMAIL_USER or EMAIL_PASS missing in environment. Check Render logs for OTP.");
     return { success: true, messageId: "console-fallback" };
   }
 
@@ -148,10 +148,10 @@ export const resendemail = async ({ fullName, otp, email }) => {
       `,
     });
 
-    console.log("Resend OTP email sent: %s", info.messageId);
+    console.log("✅ Resend OTP email sent successfully: %s", info.messageId);
     return info;
   } catch (error) {
-    console.error("❌ Resend OTP email error (OTP logged above):", error.message);
+    console.error("❌ Resend OTP email error (OTP logged in console):", error.message);
     return { success: false, messageId: "error-fallback", error: error.message };
   }
 };
@@ -162,7 +162,7 @@ export const sendResetPasswordEmail = async ({ fullName, resetUrl, email }) => {
   console.log(`==================================================\n`);
 
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.warn("⚠️ EMAIL_USER or EMAIL_PASS missing in environment. Using console reset link fallback.");
+    console.warn("⚠️ EMAIL_USER or EMAIL_PASS missing in environment. Check Render logs for reset link.");
     return { success: true, messageId: "console-fallback" };
   }
 
@@ -194,10 +194,10 @@ export const sendResetPasswordEmail = async ({ fullName, resetUrl, email }) => {
       `,
     });
 
-    console.log("Reset password email sent: %s", info.messageId);
+    console.log("✅ Reset password email sent successfully: %s", info.messageId);
     return info;
   } catch (error) {
-    console.error("❌ Reset password email error (Link logged above):", error.message);
+    console.error("❌ Reset password email error (Link logged in console):", error.message);
     return { success: false, messageId: "error-fallback", error: error.message };
   }
 };
