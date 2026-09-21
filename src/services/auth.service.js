@@ -78,11 +78,14 @@ export const verifyOTP = async (email, otp) => {
   if (!user) throw createError("User not found", 400);
   if (user.isVerified) throw createError("Email already verified", 400);
 
-  const isTestFallback = otp === "123456";
+  if (!user.otp) throw createError("No OTP code generated. Please request a new OTP.", 400);
+  if (user.otpExpires < Date.now()) throw createError("OTP code has expired. Please click 'Resend OTP'.", 400);
 
-  if (!isTestFallback) {
-    if (!user.otp || user.otp !== otp) throw createError("Invalid OTP", 400);
-    if (user.otpExpires < Date.now()) throw createError("OTP expired", 400);
+  // Validate OTP code strictly against stored OTP or fallback if EMAIL_USER is missing
+  const isMatch = user.otp === otp || ((!process.env.EMAIL_USER || !process.env.EMAIL_PASS) && otp === "123456");
+
+  if (!isMatch) {
+    throw createError("Invalid OTP code. Please enter the correct code sent to your email.", 400);
   }
 
   user.isVerified = true;

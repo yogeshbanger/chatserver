@@ -2,12 +2,12 @@ import * as authService from "../services/auth.service.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendSuccess } from "../utils/response.js";
 import User from "../models/User.js";
-
+import { generateAccessToken, generateRefreshToken } from "../utils/generateToken.js";
 
 const cookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax",
+  secure: true,
+  sameSite: "none",
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
 };
 
@@ -25,8 +25,8 @@ export const register = asyncHandler(async (req, res) => {
 export const verifyOTP = asyncHandler(async (req, res) => {
   const { email, otp } = req.body;
   const user = await authService.verifyOTP(email, otp);
-  const accessToken = (await import("../utils/generateToken.js")).generateAccessToken(user._id);
-  const refreshToken = (await import("../utils/generateToken.js")).generateRefreshToken(user._id);
+  const accessToken = generateAccessToken(user._id);
+  const refreshToken = generateRefreshToken(user._id);
 
   res.cookie("refreshToken", refreshToken, cookieOptions);
   return sendSuccess(res, 200, "Email verified successfully", {
