@@ -7,33 +7,12 @@ const getTransporter = () => {
   const user = process.env.EMAIL_USER;
   const pass = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, "") : "";
   const host = process.env.EMAIL_HOST || "smtp.gmail.com";
-
-  if (user && pass && (host.includes("gmail") || host === "smtp.gmail.com")) {
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: user,
-        pass: pass,
-      },
-      connectionTimeout: 20000,
-      greetingTimeout: 20000,
-      socketTimeout: 20000,
-    });
-  }
-
-  const port = Number(process.env.EMAIL_PORT) || 587;
-  const isSecure = port === 465;
+  const port = Number(process.env.EMAIL_PORT) || 465;
 
   return nodemailer.createTransport({
     host: host,
     port: port,
-    secure: isSecure,
-    lookup: (hostname, options, callback) => {
-      dns.lookup(hostname, { ...options, family: 4 }, callback);
-    },
-    connectionTimeout: 20000,
-    greetingTimeout: 20000,
-    socketTimeout: 20000,
+    secure: port === 465,
     auth: {
       user: user,
       pass: pass,
@@ -41,6 +20,9 @@ const getTransporter = () => {
     tls: {
       rejectUnauthorized: false,
     },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 15000,
   });
 };
 
@@ -54,9 +36,10 @@ const sendMailWithTimeout = (transporter, mailOptions, timeoutMs = 25000) => {
 };
 
 const getFromAddress = () => {
+  const user = process.env.EMAIL_USER;
   if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM;
-  if (process.env.EMAIL_USER) return `"VibesChat" <${process.env.EMAIL_USER}>`;
-  return '"VibesChat" <bangerjaat111@gmail.com>';
+  if (user) return `"VibesChat Support" <${user}>`;
+  return '"VibesChat Support" <bangerjaat111@gmail.com>';
 };
 
 export const sendEmail = async ({ fullName, otp, email }) => {
@@ -71,11 +54,18 @@ export const sendEmail = async ({ fullName, otp, email }) => {
 
   try {
     const transporter = getTransporter();
+    const fromAddress = getFromAddress();
     const info = await sendMailWithTimeout(transporter, {
-      from: getFromAddress(),
+      from: fromAddress,
+      replyTo: process.env.EMAIL_USER || fromAddress,
       to: email,
-      subject: "Verify your VibesChat account",
-      text: `Your VibesChat verification OTP is: ${otp}`,
+      subject: `${otp} is your VibesChat verification code`,
+      text: `Hello ${fullName}, your verification code for VibesChat is: ${otp}. This code expires in 10 minutes.`,
+      headers: {
+        "X-Priority": "1",
+        "X-MSMail-Priority": "High",
+        "Importance": "High",
+      },
       html: `
       <div style="margin:0;padding:40px 20px;background:#f5f7ff;font-family:Arial,Helvetica,sans-serif;">
         <div style="max-width:520px;margin:auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
@@ -125,11 +115,18 @@ export const resendemail = async ({ fullName, otp, email }) => {
 
   try {
     const transporter = getTransporter();
+    const fromAddress = getFromAddress();
     const info = await sendMailWithTimeout(transporter, {
-      from: getFromAddress(),
+      from: fromAddress,
+      replyTo: process.env.EMAIL_USER || fromAddress,
       to: email,
-      subject: "Your new VibesChat verification code",
+      subject: `${otp} is your new VibesChat verification code`,
       text: `Hi ${fullName}, your new VibesChat verification OTP is: ${otp}.`,
+      headers: {
+        "X-Priority": "1",
+        "X-MSMail-Priority": "High",
+        "Importance": "High",
+      },
       html: `
         <div style="margin:0;padding:40px 20px;background:#f5f7ff;font-family:Arial,Helvetica,sans-serif;">
           <div style="max-width:520px;margin:auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.08);">

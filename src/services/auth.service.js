@@ -21,36 +21,38 @@ export const registerUser = async ({ username, fullName, email, password }) => {
     throw createError("Username is required", 400);
   }
 
-  const existing = await User.findOne({
-    $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
-  });
-  if (existing) {
-    if (existing.email === normalizedEmail) {
-      if (existing.isVerified) {
-        throw createError("Email already registered", 400);
-      }
-      // User registered before but email is unverified (e.g. OTP failed or expired earlier).
-      // Re-generate OTP, send email, and update account details.
-      const otp = generateOTP();
-      const otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
-
-      existing.username = normalizedUsername;
-      existing.fullName = fullName;
-      existing.password = password;
-      existing.otp = otp;
-      existing.otpExpires = otpExpires;
-      await existing.save();
-
-      // Send email asynchronously without blocking registration response
-      sendEmail({ fullName, otp, email: normalizedEmail }).catch((emailErr) => {
-        console.warn("Email delivery warning for existing unverified user:", emailErr.message);
-      });
-
-      return { userId: existing._id, email: existing.email };
+  // 1. Check existing email
+  const existingEmail = await User.findOne({ email: normalizedEmail });
+  if (existingEmail) {
+    if (existingEmail.isVerified) {
+      throw createError("Email is already registered and verified. Please sign in.", 400);
     }
-    throw createError("Username already taken", 400);
+    // Existing unverified account: update user details, refresh OTP & save to DB
+    const otp = generateOTP();
+    const otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
+
+    existingEmail.username = normalizedUsername;
+    existingEmail.fullName = fullName;
+    existingEmail.password = password;
+    existingEmail.otp = otp;
+    existingEmail.otpExpires = otpExpires;
+    await existingEmail.save();
+    console.log(`✅ [MONGODB REGISTER] Updated existing unverified user: ${existingEmail._id} (${normalizedEmail})`);
+
+    sendEmail({ fullName, otp, email: normalizedEmail }).catch((emailErr) => {
+      console.warn("Email delivery warning for existing unverified user:", emailErr.message);
+    });
+
+    return { userId: existingEmail._id, email: existingEmail.email };
   }
 
+  // 2. Check existing username
+  const existingUsername = await User.findOne({ username: normalizedUsername });
+  if (existingUsername) {
+    throw createError("Username is already taken. Please choose another username.", 400);
+  }
+
+  // 3. Create new user in MongoDB
   const otp = generateOTP();
   const otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
 
@@ -64,7 +66,8 @@ export const registerUser = async ({ username, fullName, email, password }) => {
     isVerified: false,
   });
 
-  // Send email asynchronously without blocking registration response
+  console.log(`✅ [MONGODB REGISTER] Saved new user to MongoDB: ${user._id} (${normalizedEmail})`);
+
   sendEmail({ fullName, otp, email: normalizedEmail }).catch((emailErr) => {
     console.warn("Email delivery warning during registration:", emailErr.message);
   });
