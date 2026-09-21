@@ -87,33 +87,42 @@ export const initSocket = (httpServer) => {
 
     // WebRTC signaling
     socket.on("callUser", ({ to, from, offer, callType, callerInfo }) => {
-      const toSocket = onlineUsers.get(to);
+      const toSocket = onlineUsers.get(to?.toString());
       if (toSocket) {
         io.to(toSocket).emit("incomingCall", { from, offer, callType, callerInfo });
+      } else {
+        socket.emit("userUnavailable", { userId: to });
       }
     });
 
     socket.on("answerCall", ({ to, answer }) => {
-      const toSocket = onlineUsers.get(to);
+      const toSocket = onlineUsers.get(to?.toString());
       if (toSocket) {
         io.to(toSocket).emit("callAnswered", { answer });
       }
     });
 
     socket.on("iceCandidate", ({ to, candidate }) => {
-      const toSocket = onlineUsers.get(to);
+      const toSocket = onlineUsers.get(to?.toString());
       if (toSocket) {
         io.to(toSocket).emit("iceCandidate", { candidate });
       }
     });
 
+    socket.on("toggleMuteMic", ({ to, isMuted }) => {
+      const toSocket = onlineUsers.get(to?.toString());
+      if (toSocket) {
+        io.to(toSocket).emit("remoteMicStatus", { isMuted });
+      }
+    });
+
     socket.on("endCall", ({ to }) => {
-      const toSocket = onlineUsers.get(to);
+      const toSocket = onlineUsers.get(to?.toString());
       if (toSocket) io.to(toSocket).emit("callEnded");
     });
 
     socket.on("rejectCall", ({ to }) => {
-      const toSocket = onlineUsers.get(to);
+      const toSocket = onlineUsers.get(to?.toString());
       if (toSocket) io.to(toSocket).emit("callRejected");
     });
 
