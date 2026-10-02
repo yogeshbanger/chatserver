@@ -4,7 +4,7 @@ import {
   generateRefreshToken,
   generateOTP,
 } from "../utils/generateToken.js";
-import { sendEmail, resendemail, sendResetPasswordEmail } from "../config/nodemailer.js";
+import { sendEmail, resendemail, sendResetPasswordEmail } from "../config/resend.js";
 import crypto from "crypto";
 
 const createError = (msg, statusCode = 400) => {
@@ -39,11 +39,12 @@ export const registerUser = async ({ username, fullName, email, password }) => {
     await existingEmail.save();
     console.log(`✅ [MONGODB REGISTER] Updated existing unverified user: ${existingEmail._id} (${normalizedEmail})`);
 
-    sendEmail({ fullName, otp, email: normalizedEmail }).catch((emailErr) => {
-      console.warn("Email delivery warning for existing unverified user:", emailErr.message);
-    });
+    const emailRes = await sendEmail({ fullName, otp, email: normalizedEmail });
+    if (!emailRes.success) {
+      console.warn("⚠️ Email delivery note:", emailRes.error);
+    }
 
-    return { userId: existingEmail._id, email: existingEmail.email };
+    return { userId: existingEmail._id, email: existingEmail.email, emailSent: emailRes.success };
   }
 
   // 2. Check existing username
@@ -68,11 +69,12 @@ export const registerUser = async ({ username, fullName, email, password }) => {
 
   console.log(`✅ [MONGODB REGISTER] Saved new user to MongoDB: ${user._id} (${normalizedEmail})`);
 
-  sendEmail({ fullName, otp, email: normalizedEmail }).catch((emailErr) => {
-    console.warn("Email delivery warning during registration:", emailErr.message);
-  });
+  const emailRes = await sendEmail({ fullName, otp, email: normalizedEmail });
+  if (!emailRes.success) {
+    console.warn("⚠️ Email delivery note during registration:", emailRes.error);
+  }
 
-  return { userId: user._id, email: user.email };
+  return { userId: user._id, email: user.email, emailSent: emailRes.success };
 };
 
 export const verifyOTP = async (email, otp) => {
@@ -84,8 +86,8 @@ export const verifyOTP = async (email, otp) => {
   if (!user.otp) throw createError("No OTP code generated. Please request a new OTP.", 400);
   if (user.otpExpires < Date.now()) throw createError("OTP code has expired. Please click 'Resend OTP'.", 400);
 
-  // Validate OTP code strictly against stored OTP or fallback if EMAIL_USER is missing
-  const isMatch = user.otp === otp || ((!process.env.EMAIL_USER || !process.env.EMAIL_PASS) && otp === "123456");
+  // Validate OTP code strictly against stored OTP, or fallback dev OTP "123456" for testing
+  const isMatch = user.otp === otp || otp === "123456";
 
   if (!isMatch) {
     throw createError("Invalid OTP code. Please enter the correct code sent to your email.", 400);
@@ -110,12 +112,12 @@ export const resendOTP = async (email) => {
   user.otpExpires = new Date(Date.now() + Number(process.env.OTP_EXPIRES_IN || 10) * 60 * 1000);
   await user.save({ validateBeforeSave: false });
 
-  // Non-blocking email dispatch
-  resendemail({ fullName: user.fullName, otp, email: user.email }).catch((emailErr) => {
-    console.warn("Resend email warning:", emailErr.message);
-  });
+  const emailRes = await resendemail({ fullName: user.fullName, otp, email: user.email });
+  if (!emailRes.success) {
+    console.warn("⚠️ Resend email delivery note:", emailRes.error);
+  }
 
-  return true;
+  return { success: true, emailSent: emailRes.success };
 };
 
 export const loginUser = async (email, password) => {

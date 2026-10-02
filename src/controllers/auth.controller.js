@@ -9,7 +9,7 @@ const cookieOptions = {
   secure: true,
   sameSite: "none",
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-};
+}; 
 
 export const register = asyncHandler(async (req, res) => {
   const { username, fullName, email, password } = req.body;
