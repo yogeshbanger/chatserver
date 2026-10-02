@@ -3,12 +3,35 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendInstance = null;
+
+const getResendInstance = () => {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn("⚠️ RESEND_API_KEY is missing in environment variables. Email delivery disabled.");
+    return null;
+  }
+  if (!resendInstance) {
+    try {
+      resendInstance = new Resend(apiKey);
+    } catch (err) {
+      console.error("❌ Failed to initialize Resend client:", err.message);
+      return null;
+    }
+  }
+  return resendInstance;
+};
 
 /**
  * Helper to send email via Resend with smart error logging and testing-tier guidance
  */
 const sendResendEmail = async ({ to, subject, text, html }) => {
+  const resend = getResendInstance();
+  if (!resend) {
+    console.warn("⚠️ Cannot send email: RESEND_API_KEY is missing.");
+    return { success: false, messageId: null, error: "RESEND_API_KEY is missing in environment variables" };
+  }
+
   let fromAddress = process.env.EMAIL_FROM || "VibesChat <onboarding@resend.dev>";
 
   // Resend API blocks using @gmail.com / @yahoo.com directly in 'from' field without domain verification.
